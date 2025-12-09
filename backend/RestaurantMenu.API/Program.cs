@@ -125,5 +125,33 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+// Database Migration & Seeding
+try
+{
+    using (var scope = app.Services.CreateScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        
+        logger.LogInformation("Starting database migration...");
+        await db.Database.MigrateAsync();
+        logger.LogInformation("Database migration completed.");
+        
+        // Seed database in development
+        if (app.Environment.IsDevelopment())
+        {
+            logger.LogInformation("Seeding database...");
+            await Data.SeedData.SeedDatabaseAsync(db);
+            logger.LogInformation("Database seeding completed.");
+        }
+    }
+}
+catch (Exception ex)
+{
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogError(ex, "An error occurred while migrating or seeding the database.");
+    // Continue running even if seeding fails
+}
+
 app.Run();
 
