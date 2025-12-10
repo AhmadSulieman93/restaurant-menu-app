@@ -8,15 +8,24 @@ import { restaurantsApi } from "@/lib/api-client";
 import { getMockRestaurantBySlug } from "@/lib/mock-data";
 
 async function getRestaurant(slug: string) {
+  // Clean slug - remove any leading slashes or /menu/ prefix (handle multiple /menu/ prefixes)
+  let cleanSlug = slug;
+  // Remove all /menu/ prefixes
+  while (cleanSlug.startsWith('/menu/') || cleanSlug.startsWith('menu/')) {
+    cleanSlug = cleanSlug.replace(/^\/?menu\//, '');
+  }
+  // Remove leading/trailing slashes
+  cleanSlug = cleanSlug.replace(/^\/+/, '').replace(/\/+$/, '');
+  
   try {
-    const restaurant = await restaurantsApi.getBySlug(slug);
+    const restaurant = await restaurantsApi.getBySlug(cleanSlug);
     if (restaurant) {
       // Transform API response to match expected format
       return {
         ...restaurant,
-        categories: restaurant.categories.map((cat: any) => ({
+        categories: (restaurant.categories || []).map((cat: any) => ({
           ...cat,
-          menuItems: cat.menuItems.map((item: any) => ({
+          menuItems: (cat.menuItems || []).map((item: any) => ({
             ...item,
             ratings: [] // Ratings handled separately in API
           }))
@@ -28,7 +37,7 @@ async function getRestaurant(slug: string) {
   }
 
   // Fallback to mock data
-  return getMockRestaurantBySlug(slug);
+  return getMockRestaurantBySlug(cleanSlug);
 }
 
 export default async function MenuPage({
@@ -95,7 +104,7 @@ export default async function MenuPage({
 
       {/* Menu Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {restaurant.categories.length === 0 ? (
+        {!restaurant.categories || restaurant.categories.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500 text-lg">No menu items available yet.</p>
           </div>

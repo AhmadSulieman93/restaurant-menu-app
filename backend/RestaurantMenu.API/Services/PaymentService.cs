@@ -5,6 +5,7 @@ using RestaurantMenu.API.Models.DTOs;
 using PayPalCheckoutSdk.Core;
 using PayPalCheckoutSdk.Orders;
 using PayPalHttp;
+using PaymentMethodEnum = RestaurantMenu.API.Models.PaymentMethod;
 
 namespace RestaurantMenu.API.Services;
 
@@ -42,7 +43,7 @@ public class PaymentService : IPaymentService
             OrderId = dto.OrderId,
             UserId = userId,
             Amount = order.TotalAmount,
-            Method = Enum.Parse<PaymentMethod>(dto.Method.ToUpper()),
+            Method = Enum.Parse<PaymentMethodEnum>(dto.Method.ToUpper()),
             Status = PaymentStatus.PENDING
         };
 
@@ -69,7 +70,7 @@ public class PaymentService : IPaymentService
             {
                 OrderId = dto.OrderId,
                 Amount = order.TotalAmount,
-                Method = PaymentMethod.PAYPAL,
+                Method = PaymentMethodEnum.PAYPAL,
                 Status = PaymentStatus.PENDING
             };
             _context.Payments.Add(payment);

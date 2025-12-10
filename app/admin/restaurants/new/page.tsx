@@ -27,16 +27,36 @@ export default function NewRestaurantPage() {
     setLoading(true);
 
     try {
+      // Get auth token
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        toast({
+          title: "Error",
+          description: "Please log in again.",
+          variant: "destructive",
+        });
+        router.push('/login');
+        return;
+      }
+
+      // Clean the slug before sending
+      const cleanedData = {
+        ...formData,
+        slug: cleanSlug(formData.slug),
+      };
+
       const response = await fetch("/api/restaurants", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(cleanedData),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to create restaurant");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.message || "Failed to create restaurant");
       }
 
       const restaurant = await response.json();
@@ -47,10 +67,10 @@ export default function NewRestaurantPage() {
       });
 
       router.push(`/admin/restaurants/${restaurant.id}`);
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to create restaurant. Please try again.",
+        description: error.message || "Failed to create restaurant. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -63,6 +83,15 @@ export default function NewRestaurantPage() {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "");
+  };
+
+  const cleanSlug = (slug: string) => {
+    // Remove any leading slashes, /menu/ prefix, or spaces
+    return slug
+      .trim()
+      .replace(/^\/menu\//, '')
+      .replace(/^\//, '')
+      .replace(/\/$/, '');
   };
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {

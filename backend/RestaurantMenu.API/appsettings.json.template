@@ -8,7 +8,7 @@
   },
   "AllowedHosts": "*",
   "ConnectionStrings": {
-    "DefaultConnection": "Host=aws-1-ap-southeast-1.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.bxaapyvtgsfjieiacgqj;Password=A@ssd!123ahmad;SSL Mode=Require;Trust Server Certificate=true;"
+    "DefaultConnection": "postgresql://postgres.bxaapyvtgsfjieiacgqj:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres"
   },
   "JwtSettings": {
     "SecretKey": "YourSuperSecretKeyThatIsAtLeast32CharactersLongForJWTTokenGeneration",
@@ -32,3 +32,4 @@
   },
   "BaseUrl": "http://localhost:5000"
 }
+

@@ -71,23 +71,33 @@ export default function RestaurantManagePage() {
   });
 
   const fetchRestaurant = useCallback(async () => {
+    setLoading(true);
     try {
-      const response = await fetch(`/api/restaurants`);
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        console.log("No auth token");
+        return;
+      }
+
+      // Fetch restaurant by ID from backend
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${API_BASE_URL}/restaurants/${params.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
       if (response.ok) {
-        const restaurants = await response.json();
-        const found = restaurants.find((r: Restaurant) => r.id === params.id);
-        if (found) {
-          const detailResponse = await fetch(`/api/restaurants/${found.slug}`);
-          if (detailResponse.ok) {
-            const detail = await detailResponse.json();
-            setRestaurant(detail);
-            return;
-          }
-        }
+        const detail = await response.json();
+        setRestaurant(detail);
+      } else if (response.status === 404) {
+        console.log("Restaurant not found");
+        setRestaurant(null);
       }
     } catch (error) {
-      // Silently fail - we already have mock data
-      console.log("Using mock data for restaurant management");
+      console.error("Error fetching restaurant:", error);
+    } finally {
+      setLoading(false);
     }
   }, [params.id]);
 
@@ -99,25 +109,41 @@ export default function RestaurantManagePage() {
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        toast({
+          title: "Error",
+          description: "Please log in again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const response = await fetch("/api/categories", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
         body: JSON.stringify({
           ...categoryForm,
           restaurantId: params.id,
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to create category");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to create category");
+      }
 
       toast({ title: "Success!", description: "Category created." });
       setCategoryDialogOpen(false);
       setCategoryForm({ name: "", description: "", order: 0 });
       fetchRestaurant();
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to create category.",
+        description: error.message || "Failed to create category.",
         variant: "destructive",
       });
     }
@@ -128,16 +154,32 @@ export default function RestaurantManagePage() {
     if (!menuItemDialogOpen) return;
 
     try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        toast({
+          title: "Error",
+          description: "Please log in again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const response = await fetch("/api/menu-items", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
         body: JSON.stringify({
           ...menuItemForm,
           categoryId: menuItemDialogOpen,
         }),
       });
 
-      if (!response.ok) throw new Error("Failed to create menu item");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to create menu item");
+      }
 
       toast({ title: "Success!", description: "Menu item created." });
       setMenuItemDialogOpen(null);
@@ -149,14 +191,24 @@ export default function RestaurantManagePage() {
         order: 0,
       });
       fetchRestaurant();
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to create menu item.",
+        description: error.message || "Failed to create menu item.",
         variant: "destructive",
       });
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600">Loading restaurant...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!restaurant) {
     return (
@@ -255,7 +307,7 @@ export default function RestaurantManagePage() {
         </div>
 
         <div className="space-y-8">
-          {restaurant.categories.map((category) => (
+          {(restaurant.categories || []).map((category) => (
             <Card key={category.id}>
               <CardHeader>
                 <div className="flex items-center justify-between">

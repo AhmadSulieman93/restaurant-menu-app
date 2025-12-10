@@ -50,8 +50,21 @@ builder.Services.AddSwaggerGen(c =>
 
 // Database Configuration
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrEmpty(connectionString))
+{
+    throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+}
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(connectionString));
+{
+    options.UseNpgsql(connectionString, npgsqlOptions =>
+    {
+        npgsqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(5),
+            errorCodesToAdd: null);
+    });
+});
 
 // JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -133,16 +146,31 @@ try
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
         
-        logger.LogInformation("Starting database migration...");
-        await db.Database.MigrateAsync();
-        logger.LogInformation("Database migration completed.");
+        // Try to run migrations (will skip if tables already exist)
+        try
+        {
+            logger.LogInformation("Checking database migrations...");
+            await db.Database.MigrateAsync();
+            logger.LogInformation("Database migrations completed.");
+        }
+        catch (Exception migrationEx)
+        {
+            logger.LogWarning(migrationEx, "Migration skipped or failed - tables may already exist");
+        }
         
         // Seed database in development
         if (app.Environment.IsDevelopment())
         {
-            logger.LogInformation("Seeding database...");
-            await Data.SeedData.SeedDatabaseAsync(db);
-            logger.LogInformation("Database seeding completed.");
+            try
+            {
+                logger.LogInformation("Seeding database...");
+                await SeedData.SeedDatabaseAsync(db);
+                logger.LogInformation("Database seeding completed.");
+            }
+            catch (Exception seedEx)
+            {
+                logger.LogWarning(seedEx, "Seeding failed - data may already exist");
+            }
         }
     }
 }

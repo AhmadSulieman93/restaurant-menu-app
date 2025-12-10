@@ -1,56 +1,70 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { mockRestaurants, getMockRestaurants } from "@/lib/mock-data";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function GET() {
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+
+export async function GET(request: NextRequest) {
   try {
-    const restaurants = await prisma.restaurant.findMany({
-      include: {
-        categories: {
-          include: {
-            menuItems: {
-              include: {
-                ratings: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: {
-        createdAt: "desc",
+    const searchParams = request.nextUrl.searchParams;
+    const publishedOnly = searchParams.get('publishedOnly') !== 'false';
+    
+    const response = await fetch(`${API_BASE_URL}/restaurants?publishedOnly=${publishedOnly}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
       },
     });
-    // Format to match expected structure
-    const formatted = restaurants.map(({ categories, ...rest }) => ({
-      ...rest,
-      _count: {
-        categories: categories.length,
-      },
-    }));
-    return NextResponse.json(formatted);
+
+    if (!response.ok) {
+      throw new Error(`Backend responded with ${response.status}`);
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data);
   } catch (error) {
-    console.error("Database error, using mock data:", error);
-    // Return mock data as fallback
-    return NextResponse.json(getMockRestaurants());
+    console.error("Error fetching restaurants:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch restaurants" },
+      { status: 500 }
+    );
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, slug, logo, description } = body;
+    
+    // Get auth token from cookies or headers
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '') || request.cookies.get('auth_token')?.value;
+    
+    if (!token) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
 
-    const restaurant = await prisma.restaurant.create({
-      data: {
-        name,
-        slug,
-        logo,
-        description,
+    const response = await fetch(`${API_BASE_URL}/restaurants`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
       },
+      body: JSON.stringify(body),
     });
 
-    return NextResponse.json(restaurant, { status: 201 });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Failed to create restaurant' }));
+      return NextResponse.json(
+        { error: errorData.message || "Failed to create restaurant" },
+        { status: response.status }
+      );
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data, { status: 201 });
   } catch (error) {
+    console.error("Error creating restaurant:", error);
     return NextResponse.json(
       { error: "Failed to create restaurant" },
       { status: 500 }

@@ -18,6 +18,7 @@ public class RestaurantCreateDto
 public class RestaurantUpdateDto
 {
     public string? Name { get; set; }
+    public string? Slug { get; set; }
     public string? Logo { get; set; }
     public string? CoverImage { get; set; }
     public string? Description { get; set; }
@@ -50,11 +51,12 @@ public class RestaurantResponseDto
     public bool IsPublished { get; set; }
     public int CategoryCount { get; set; }
     public DateTime CreatedAt { get; set; }
+    public List<CategoryResponseDto>? Categories { get; set; }
 }
 
 public class RestaurantDetailDto : RestaurantResponseDto
 {
-    public List<CategoryResponseDto> Categories { get; set; } = new();
+    public new List<CategoryResponseDto> Categories { get; set; } = new();
 }
 
 public class CategoryCreateDto

@@ -97,7 +97,7 @@ export default function AdminPage() {
                     </Link>
                   </Button>
                   <Button asChild className="w-full" variant="outline">
-                    <Link href={`/menu/${restaurant.slug}`} target="_blank">
+                    <Link href={`/menu/${restaurant.slug.replace(/^\/menu\//, '').replace(/^\//, '')}`} target="_blank">
                       View Menu
                     </Link>
                   </Button>

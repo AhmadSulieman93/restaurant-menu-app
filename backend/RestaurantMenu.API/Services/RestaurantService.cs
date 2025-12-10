@@ -16,10 +16,13 @@ public class RestaurantService : IRestaurantService
 
     public async Task<RestaurantResponseDto> CreateRestaurantAsync(RestaurantCreateDto dto, string ownerUserId)
     {
+        // Clean slug - remove any leading slashes or /menu/ prefix
+        var cleanSlug = dto.Slug.Trim().Replace("/menu/", "").TrimStart('/').TrimEnd('/');
+        
         var restaurant = new Restaurant
         {
             Name = dto.Name,
-            Slug = dto.Slug,
+            Slug = cleanSlug,
             Logo = dto.Logo,
             CoverImage = dto.CoverImage,
             Description = dto.Description,
@@ -29,7 +32,8 @@ public class RestaurantService : IRestaurantService
             Address = dto.Address,
             City = dto.City,
             Country = dto.Country,
-            Status = RestaurantStatus.PENDING
+            Status = RestaurantStatus.ACTIVE,
+            IsPublished = true // Auto-publish new restaurants
         };
 
         _context.Restaurants.Add(restaurant);
@@ -51,17 +55,69 @@ public class RestaurantService : IRestaurantService
     {
         var restaurant = await _context.Restaurants
             .Include(r => r.Categories)
+                .ThenInclude(c => c.MenuItems)
+                    .ThenInclude(m => m.Ratings)
             .FirstOrDefaultAsync(r => r.Id == id);
 
-        return restaurant == null ? null : MapToResponse(restaurant);
+        if (restaurant == null) return null;
+
+        // Return detailed DTO with categories for admin panel
+        return new RestaurantResponseDto
+        {
+            Id = restaurant.Id,
+            Name = restaurant.Name,
+            Slug = restaurant.Slug,
+            Logo = restaurant.Logo,
+            CoverImage = restaurant.CoverImage,
+            Description = restaurant.Description,
+            Status = restaurant.Status.ToString(),
+            Phone = restaurant.Phone,
+            Email = restaurant.Email,
+            Website = restaurant.Website,
+            Address = restaurant.Address,
+            City = restaurant.City,
+            Country = restaurant.Country,
+            QrCode = restaurant.QrCode,
+            IsPublished = restaurant.IsPublished,
+            CategoryCount = restaurant.Categories.Count,
+            CreatedAt = restaurant.CreatedAt,
+            Categories = restaurant.Categories
+                .OrderBy(c => c.Order)
+                .Select(c => new CategoryResponseDto
+                {
+                    Id = c.Id,
+                    Name = c.Name,
+                    Description = c.Description,
+                    Order = c.Order,
+                    IsActive = c.IsActive,
+                    MenuItemCount = c.MenuItems.Count,
+                    MenuItems = c.MenuItems
+                        .OrderBy(m => m.Order)
+                        .Select(m => new MenuItemResponseDto
+                        {
+                            Id = m.Id,
+                            Name = m.Name,
+                            Description = m.Description,
+                            Price = m.Price,
+                            Image = m.Image,
+                            Order = m.Order,
+                            IsAvailable = m.IsAvailable,
+                            AverageRating = m.Ratings.Any() ? m.Ratings.Average(r => r.Value) : 0,
+                            RatingCount = m.Ratings.Count
+                        }).ToList()
+                }).ToList()
+        };
     }
 
     public async Task<RestaurantDetailDto?> GetRestaurantBySlugAsync(string slug)
     {
+        // Clean slug - remove any leading slashes or /menu/ prefix
+        var cleanSlug = slug.Trim().Replace("/menu/", "").TrimStart('/').TrimEnd('/');
+        
         var restaurant = await _context.Restaurants
             .Include(r => r.Categories)
                 .ThenInclude(c => c.MenuItems)
-            .FirstOrDefaultAsync(r => r.Slug == slug && r.IsPublished);
+            .FirstOrDefaultAsync(r => r.Slug == cleanSlug && r.IsPublished);
 
         if (restaurant == null) return null;
 
@@ -142,6 +198,18 @@ public class RestaurantService : IRestaurantService
         }
 
         if (dto.Name != null) restaurant.Name = dto.Name;
+        if (dto.Slug != null) 
+        {
+            // Clean slug - remove any leading slashes or /menu/ prefix
+            var cleanSlug = dto.Slug.Trim();
+            // Remove all /menu/ prefixes (handle multiple)
+            while (cleanSlug.StartsWith("/menu/") || cleanSlug.StartsWith("menu/"))
+            {
+                cleanSlug = cleanSlug.Replace("/menu/", "").Replace("menu/", "");
+            }
+            cleanSlug = cleanSlug.TrimStart('/').TrimEnd('/');
+            restaurant.Slug = cleanSlug;
+        }
         if (dto.Logo != null) restaurant.Logo = dto.Logo;
         if (dto.CoverImage != null) restaurant.CoverImage = dto.CoverImage;
         if (dto.Description != null) restaurant.Description = dto.Description;
