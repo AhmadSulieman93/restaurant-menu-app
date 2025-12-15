@@ -53,3 +53,5 @@ In the Supabase modal:
 
 **What error do you see in the backend console/terminal?** That will help us identify the exact issue! 🔍
 
+
+

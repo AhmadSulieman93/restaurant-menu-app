@@ -39,15 +39,25 @@ public class AuthController : ControllerBase
     {
         try
         {
+            Console.WriteLine($"Login attempt for email: {request.Email}");
             var response = await _authService.LoginAsync(request);
+            Console.WriteLine($"Login successful for: {request.Email}");
             return Ok(response);
         }
         catch (UnauthorizedAccessException ex)
         {
+            Console.WriteLine($"Login unauthorized: {ex.Message}");
             return Unauthorized(new { message = ex.Message });
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"Login error: {ex.GetType().Name}");
+            Console.WriteLine($"Error message: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"Inner exception: {ex.InnerException.GetType().Name} - {ex.InnerException.Message}");
+            }
             return StatusCode(500, new { message = "An error occurred", error = ex.Message });
         }
     }

@@ -96,3 +96,5 @@ Once you update the connection string with the correct password:
 
 **Need help?** Share the connection string format you see in Supabase (with password hidden) and I'll help you format it correctly!
 
+
+

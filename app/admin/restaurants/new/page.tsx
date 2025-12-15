@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/components/ui/use-toast";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { ImageUpload } from "@/components/ImageUpload";
 
 export default function NewRestaurantPage() {
   const router = useRouter();
@@ -19,6 +20,7 @@ export default function NewRestaurantPage() {
     name: "",
     slug: "",
     logo: "",
+    coverImage: "",
     description: "",
   });
 
@@ -155,18 +157,19 @@ export default function NewRestaurantPage() {
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="logo">Logo URL</Label>
-                <Input
-                  id="logo"
-                  type="url"
-                  value={formData.logo}
-                  onChange={(e) =>
-                    setFormData({ ...formData, logo: e.target.value })
-                  }
-                  placeholder="https://example.com/logo.png"
-                />
-              </div>
+              <ImageUpload
+                label="Restaurant Logo"
+                value={formData.logo}
+                onChange={(url) => setFormData({ ...formData, logo: url })}
+                maxSizeMB={5}
+              />
+
+              <ImageUpload
+                label="Cover Image"
+                value={formData.coverImage}
+                onChange={(url) => setFormData({ ...formData, coverImage: url })}
+                maxSizeMB={5}
+              />
 
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>

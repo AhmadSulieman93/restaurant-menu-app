@@ -81,11 +81,22 @@ export const restaurantsApi = {
       token,
     }),
 
-  delete: (id: string, token: string) =>
-    apiRequest(`/restaurants/${id}`, {
+  delete: (id: string, token: string) => {
+    // Use Next.js API route for DELETE to handle authentication properly
+    return fetch(`/api/restaurants/${id}`, {
       method: 'DELETE',
-      token,
-    }),
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    }).then(async (response) => {
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ message: response.statusText }));
+        throw new Error(error.error || error.message || 'Failed to delete restaurant');
+      }
+      // DELETE returns 204 No Content, so no JSON to parse
+      return response.status === 204 ? {} : response.json();
+    });
+  },
 };
 
 // Categories API
@@ -181,18 +192,29 @@ export const paymentsApi = {
 export const uploadApi = {
   uploadImage: async (file: File, token: string): Promise<{ url: string }> => {
     const formData = new FormData();
-    formData.append('file', file);
+    // Explicitly append file with filename to ensure it's preserved
+    formData.append('file', file, file.name);
 
+    console.log('Uploading file:', {
+      name: file.name,
+      type: file.type,
+      size: file.size
+    });
+
+    // Call backend directly - CORS is configured
     const response = await fetch(`${API_BASE_URL}/upload/image`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
+        // Don't set Content-Type - browser will set it with boundary for FormData
       },
       body: formData,
     });
 
     if (!response.ok) {
-      throw new Error('Upload failed');
+      const errorData = await response.json().catch(() => ({ error: 'Upload failed' }));
+      console.error('Upload failed:', errorData);
+      throw new Error(errorData.error || errorData.message || 'Upload failed');
     }
 
     return response.json();

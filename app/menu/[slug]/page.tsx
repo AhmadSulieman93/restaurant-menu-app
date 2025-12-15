@@ -79,6 +79,8 @@ export default async function MenuPage({
                     alt={restaurant.name}
                     fill
                     className="object-contain rounded-lg"
+                    loading="lazy"
+                    sizes="80px"
                   />
                 </div>
               )}

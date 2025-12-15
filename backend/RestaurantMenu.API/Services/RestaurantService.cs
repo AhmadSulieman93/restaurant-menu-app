@@ -16,8 +16,40 @@ public class RestaurantService : IRestaurantService
 
     public async Task<RestaurantResponseDto> CreateRestaurantAsync(RestaurantCreateDto dto, string ownerUserId)
     {
-        // Clean slug - remove any leading slashes or /menu/ prefix
+        // Validate required fields
+        if (string.IsNullOrWhiteSpace(dto.Name))
+        {
+            throw new InvalidOperationException("Restaurant name is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.Slug))
+        {
+            throw new InvalidOperationException("Restaurant slug is required.");
+        }
+
+        // Check if user already owns a restaurant
+        var existingOwner = await _context.RestaurantOwners
+            .FirstOrDefaultAsync(ro => ro.UserId == ownerUserId);
+        
+        if (existingOwner != null)
+        {
+            throw new InvalidOperationException("You already own a restaurant. Each user can only own one restaurant.");
+        }
+
+        // Check if slug already exists
         var cleanSlug = dto.Slug.Trim().Replace("/menu/", "").TrimStart('/').TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(cleanSlug))
+        {
+            throw new InvalidOperationException("Restaurant slug cannot be empty after cleaning.");
+        }
+
+        var existingSlug = await _context.Restaurants
+            .FirstOrDefaultAsync(r => r.Slug == cleanSlug);
+        
+        if (existingSlug != null)
+        {
+            throw new InvalidOperationException($"A restaurant with the slug '{cleanSlug}' already exists. Please choose a different slug.");
+        }
         
         var restaurant = new Restaurant
         {
@@ -36,19 +68,51 @@ public class RestaurantService : IRestaurantService
             IsPublished = true // Auto-publish new restaurants
         };
 
-        _context.Restaurants.Add(restaurant);
-        await _context.SaveChangesAsync();
-
-        // Assign owner
-        var owner = new RestaurantOwner
+        try
         {
-            UserId = ownerUserId,
-            RestaurantId = restaurant.Id
-        };
-        _context.RestaurantOwners.Add(owner);
-        await _context.SaveChangesAsync();
+            _context.Restaurants.Add(restaurant);
+            await _context.SaveChangesAsync();
 
-        return MapToResponse(restaurant);
+            // Assign owner
+            var owner = new RestaurantOwner
+            {
+                UserId = ownerUserId,
+                RestaurantId = restaurant.Id
+            };
+            _context.RestaurantOwners.Add(owner);
+            await _context.SaveChangesAsync();
+
+            return MapToResponse(restaurant);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException ex)
+        {
+            // Handle database constraint violations
+            var innerException = ex.InnerException;
+            if (innerException != null)
+            {
+                var errorMessage = innerException.Message;
+                
+                if (errorMessage.Contains("duplicate key") || errorMessage.Contains("UNIQUE constraint"))
+                {
+                    if (errorMessage.Contains("UserId") || errorMessage.Contains("RestaurantOwners"))
+                    {
+                        throw new InvalidOperationException("You already own a restaurant. Each user can only own one restaurant.", ex);
+                    }
+                    if (errorMessage.Contains("Slug") || errorMessage.Contains("Restaurants"))
+                    {
+                        throw new InvalidOperationException($"A restaurant with the slug '{cleanSlug}' already exists. Please choose a different slug.", ex);
+                    }
+                    if (errorMessage.Contains("QrCode"))
+                    {
+                        // Retry with a new QR code (very unlikely but handle it)
+                        restaurant.QrCode = Guid.NewGuid().ToString();
+                        await _context.SaveChangesAsync();
+                        return MapToResponse(restaurant);
+                    }
+                }
+            }
+            throw new Exception($"Failed to create restaurant: {ex.Message}", ex);
+        }
     }
 
     public async Task<RestaurantResponseDto?> GetRestaurantByIdAsync(string id)
@@ -228,13 +292,54 @@ public class RestaurantService : IRestaurantService
         return MapToResponse(restaurant);
     }
 
-    public async Task<bool> DeleteRestaurantAsync(string id)
+    public async Task<bool> DeleteRestaurantAsync(string id, string? userId = null)
     {
-        var restaurant = await _context.Restaurants.FindAsync(id);
-        if (restaurant == null) return false;
+        Console.WriteLine($"=== DeleteRestaurantAsync ===");
+        Console.WriteLine($"Restaurant ID: {id}");
+        Console.WriteLine($"User ID: {userId ?? "null (SUPER_ADMIN)"}");
+        
+        var restaurant = await _context.Restaurants
+            .Include(r => r.Owners)
+            .FirstOrDefaultAsync(r => r.Id == id);
+        
+        if (restaurant == null)
+        {
+            Console.WriteLine("Restaurant not found");
+            return false;
+        }
 
+        Console.WriteLine($"Restaurant found: {restaurant.Name}");
+        Console.WriteLine($"Restaurant owners count: {restaurant.Owners.Count}");
+        
+        // If userId is provided, check if user owns this restaurant
+        if (userId != null)
+        {
+            Console.WriteLine($"Checking ownership for user: {userId}");
+            var owners = restaurant.Owners.ToList();
+            foreach (var owner in owners)
+            {
+                Console.WriteLine($"  Owner: UserId={owner.UserId}, IsActive={owner.IsActive}");
+            }
+            
+            var isOwner = restaurant.Owners.Any(o => o.UserId == userId && o.IsActive);
+            Console.WriteLine($"Is owner: {isOwner}");
+            
+            if (!isOwner)
+            {
+                Console.WriteLine("ERROR: User does not own this restaurant");
+                throw new UnauthorizedAccessException("You can only delete restaurants you own.");
+            }
+        }
+        else
+        {
+            Console.WriteLine("SUPER_ADMIN deleting - no ownership check required");
+        }
+
+        // Delete associated data (cascade should handle this, but being explicit)
+        Console.WriteLine("Deleting restaurant...");
         _context.Restaurants.Remove(restaurant);
         await _context.SaveChangesAsync();
+        Console.WriteLine("Restaurant deleted successfully");
         return true;
     }
 

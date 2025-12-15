@@ -61,31 +61,70 @@ public class AuthService : IAuthService
 
     public async Task<LoginResponse> LoginAsync(LoginRequest request)
     {
-        var user = await _context.Users
-            .Include(u => u.Restaurants)
-            .FirstOrDefaultAsync(u => u.Email == request.Email);
-
-        if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+        try
         {
-            throw new UnauthorizedAccessException("Invalid email or password");
+            Console.WriteLine($"Attempting to query database for user: {request.Email}");
+            
+            // Test database connection first
+            try
+            {
+                var canConnect = await _context.Database.CanConnectAsync();
+                Console.WriteLine($"Database connection test: {canConnect}");
+            }
+            catch (Exception connEx)
+            {
+                Console.WriteLine($"Database connection test failed: {connEx.GetType().Name} - {connEx.Message}");
+                throw new Exception($"Cannot connect to database. Please check your database connection. Error: {connEx.Message}", connEx);
+            }
+            
+            var user = await _context.Users
+                .Include(u => u.Restaurants)
+                .FirstOrDefaultAsync(u => u.Email == request.Email);
+            
+            Console.WriteLine($"User query completed. User found: {user != null}");
+
+            if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+            {
+                throw new UnauthorizedAccessException("Invalid email or password");
+            }
+
+            if (user.Status != UserStatus.ACTIVE)
+            {
+                throw new UnauthorizedAccessException("Account is not active");
+            }
+
+            var token = GenerateJwtToken(user);
+            var restaurantId = user.Restaurants.FirstOrDefault()?.RestaurantId;
+
+            return new LoginResponse
+            {
+                Token = token,
+                UserId = user.Id,
+                Email = user.Email,
+                Role = user.Role.ToString(),
+                RestaurantId = restaurantId
+            };
         }
-
-        if (user.Status != UserStatus.ACTIVE)
+        catch (System.Net.Sockets.SocketException ex) when (ex.Message.Contains("The requested name is valid, but no data of the requested type was found"))
         {
-            throw new UnauthorizedAccessException("Account is not active");
+            throw new Exception("Database connection failed. Please check your database connection string and network.", ex);
         }
-
-        var token = GenerateJwtToken(user);
-        var restaurantId = user.Restaurants.FirstOrDefault()?.RestaurantId;
-
-        return new LoginResponse
+        catch (Npgsql.NpgsqlException ex)
         {
-            Token = token,
-            UserId = user.Id,
-            Email = user.Email,
-            Role = user.Role.ToString(),
-            RestaurantId = restaurantId
-        };
+            throw new Exception($"Database error: {ex.Message}. Please check your database connection.", ex);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Login error: {ex.GetType().Name} - {ex.Message}");
+            Console.WriteLine($"Full exception: {ex}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"Inner exception type: {ex.InnerException.GetType().Name}");
+                Console.WriteLine($"Inner exception message: {ex.InnerException.Message}");
+                Console.WriteLine($"Inner exception stack: {ex.InnerException.StackTrace}");
+            }
+            throw;
+        }
     }
 
     public async Task<UserResponse?> GetUserByIdAsync(string userId)

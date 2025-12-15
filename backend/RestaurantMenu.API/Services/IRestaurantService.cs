@@ -9,7 +9,7 @@ public interface IRestaurantService
     Task<RestaurantDetailDto?> GetRestaurantBySlugAsync(string slug);
     Task<List<RestaurantResponseDto>> GetAllRestaurantsAsync(bool publishedOnly = false);
     Task<RestaurantResponseDto> UpdateRestaurantAsync(string id, RestaurantUpdateDto dto, string? userId = null);
-    Task<bool> DeleteRestaurantAsync(string id);
+    Task<bool> DeleteRestaurantAsync(string id, string? userId = null);
     Task<bool> AssignOwnerAsync(string restaurantId, string userId);
 }
 

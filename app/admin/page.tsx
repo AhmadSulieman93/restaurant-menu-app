@@ -5,7 +5,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Store, Package, Star } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/use-toast";
+import { Plus, Store, Package, Star, Trash2 } from "lucide-react";
 import { restaurantsApi } from "@/lib/api-client";
 import { auth } from "@/lib/auth";
 import { getMockRestaurants } from "@/lib/mock-data";
@@ -24,9 +33,13 @@ interface Restaurant {
 
 export default function AdminPage() {
   const router = useRouter();
+  const { toast } = useToast();
   // Initialize with mock data immediately
   const [restaurants, setRestaurants] = useState<Restaurant[]>(getMockRestaurants());
   const [loading, setLoading] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [restaurantToDelete, setRestaurantToDelete] = useState<Restaurant | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     // Check authentication
@@ -54,6 +67,50 @@ export default function AdminPage() {
       console.log("API error, using mock data:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteClick = (restaurant: Restaurant) => {
+    setRestaurantToDelete(restaurant);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!restaurantToDelete) return;
+
+    setDeleting(true);
+    try {
+      const token = auth.getToken();
+      if (!token) {
+        toast({
+          title: "Error",
+          description: "Please log in again.",
+          variant: "destructive",
+        });
+        router.push('/login');
+        return;
+      }
+
+      await restaurantsApi.delete(restaurantToDelete.id, token);
+      
+      toast({
+        title: "Success",
+        description: "Restaurant deleted successfully.",
+      });
+
+      // Remove from list
+      setRestaurants(restaurants.filter(r => r.id !== restaurantToDelete.id));
+      setDeleteDialogOpen(false);
+      setRestaurantToDelete(null);
+    } catch (error: any) {
+      console.error("Error deleting restaurant:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete restaurant. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -101,6 +158,14 @@ export default function AdminPage() {
                       View Menu
                     </Link>
                   </Button>
+                  <Button 
+                    className="w-full" 
+                    variant="destructive"
+                    onClick={() => handleDeleteClick(restaurant)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -122,6 +187,37 @@ export default function AdminPage() {
           </div>
         )}
       </main>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Restaurant</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{restaurantToDelete?.name}"? This action cannot be undone and will permanently delete the restaurant and all its data.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false);
+                setRestaurantToDelete(null);
+              }}
+              disabled={deleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              disabled={deleting}
+            >
+              {deleting ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

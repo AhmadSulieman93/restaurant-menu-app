@@ -47,14 +47,45 @@ public class RestaurantsController : ControllerBase
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (userId == null) return Unauthorized();
 
+        // Log incoming data for debugging
+        Console.WriteLine($"=== Create Restaurant Request ===");
+        Console.WriteLine($"UserId: {userId}");
+        Console.WriteLine($"Name: {dto?.Name ?? "null"}");
+        Console.WriteLine($"Slug: {dto?.Slug ?? "null"}");
+        Console.WriteLine($"Logo: {dto?.Logo ?? "null"}");
+        Console.WriteLine($"CoverImage: {dto?.CoverImage ?? "null"}");
+        Console.WriteLine($"Description: {dto?.Description ?? "null"}");
+
         try
         {
             var restaurant = await _restaurantService.CreateRestaurantAsync(dto, userId);
+            Console.WriteLine($"Restaurant created successfully: {restaurant.Id}");
             return CreatedAtAction(nameof(GetRestaurantById), new { id = restaurant.Id }, restaurant);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // User-friendly validation errors
+            Console.WriteLine($"InvalidOperationException: {ex.Message}");
+            return BadRequest(new { message = ex.Message });
         }
         catch (Exception ex)
         {
-            return BadRequest(new { message = ex.Message });
+            // Log the full error for debugging
+            Console.WriteLine($"=== ERROR CREATING RESTAURANT ===");
+            Console.WriteLine($"Error Type: {ex.GetType().Name}");
+            Console.WriteLine($"Error Message: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"Inner Exception Type: {ex.InnerException.GetType().Name}");
+                Console.WriteLine($"Inner Exception Message: {ex.InnerException.Message}");
+                Console.WriteLine($"Inner Exception Stack: {ex.InnerException.StackTrace}");
+            }
+            Console.WriteLine($"Stack Trace: {ex.StackTrace}");
+            Console.WriteLine($"=================================");
+            
+            // Return user-friendly error message
+            var errorMessage = ex.InnerException?.Message ?? ex.Message;
+            return BadRequest(new { message = errorMessage });
         }
     }
 
@@ -88,13 +119,48 @@ public class RestaurantsController : ControllerBase
         }
     }
 
-    [Authorize(Roles = "SUPER_ADMIN")]
+    [Authorize(Roles = "SUPER_ADMIN,RESTAURANT_OWNER")]
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteRestaurant(string id)
     {
-        var success = await _restaurantService.DeleteRestaurantAsync(id);
-        if (!success) return NotFound();
-        return NoContent();
+        Console.WriteLine($"=== DELETE Restaurant Request ===");
+        Console.WriteLine($"Restaurant ID: {id}");
+        Console.WriteLine($"User authenticated: {User.Identity?.IsAuthenticated}");
+        Console.WriteLine($"User name: {User.Identity?.Name}");
+        
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        var role = User.FindFirst(ClaimTypes.Role)?.Value;
+        
+        Console.WriteLine($"User ID: {userId}");
+        Console.WriteLine($"User Role: {role}");
+        
+        if (userId == null)
+        {
+            Console.WriteLine("ERROR: User ID is null - authentication failed");
+            return Unauthorized(new { message = "User not authenticated" });
+        }
+
+        try
+        {
+            var success = await _restaurantService.DeleteRestaurantAsync(
+                id, 
+                role == "SUPER_ADMIN" ? null : userId
+            );
+            if (!success) return NotFound();
+            Console.WriteLine($"Restaurant deleted successfully: {id}");
+            return NoContent();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Console.WriteLine($"UnauthorizedAccessException: {ex.Message}");
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting restaurant: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [Authorize(Roles = "SUPER_ADMIN")]

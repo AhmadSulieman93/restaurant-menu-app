@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { getMockRestaurantById } from "@/lib/mock-data";
+import { ImageUpload } from "@/components/ImageUpload";
 
 interface Category {
   id: string;
@@ -381,20 +382,17 @@ export default function RestaurantManagePage() {
                             required
                           />
                         </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="item-image">Image URL</Label>
-                          <Input
-                            id="item-image"
-                            type="url"
-                            value={menuItemForm.image}
-                            onChange={(e) =>
-                              setMenuItemForm({
-                                ...menuItemForm,
-                                image: e.target.value,
-                              })
-                            }
-                          />
-                        </div>
+                        <ImageUpload
+                          label="Menu Item Image"
+                          value={menuItemForm.image}
+                          onChange={(url) =>
+                            setMenuItemForm({
+                              ...menuItemForm,
+                              image: url,
+                            })
+                          }
+                          maxSizeMB={5}
+                        />
                         <div className="space-y-2">
                           <Label htmlFor="item-order">Order</Label>
                           <Input
