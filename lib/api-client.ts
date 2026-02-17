@@ -1,19 +1,18 @@
 // API Client for .NET Backend
 
 function getApiBaseUrl(): string {
-  const configured =
-    process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
-  // Server: use BACKEND_API_URL if set (not exposed to client)
-  if (typeof window === "undefined" && process.env.BACKEND_API_URL) {
-    return process.env.BACKEND_API_URL;
-  }
-  // Client: if configured URL is localhost, use proxy (fixes CORS when deployed)
+  // Client in browser: use proxy when on production domain (avoids CORS to localhost)
   if (typeof window !== "undefined") {
-    if (configured.includes("localhost") || configured.includes("127.0.0.1")) {
-      return "/api/backend";
+    const isProduction = !window.location.hostname.includes("localhost") && !window.location.hostname.includes("127.0.0.1");
+    if (isProduction) {
+      return "/api/backend"; // Always proxy when deployed - no localhost
     }
+    return process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
   }
-  return configured;
+  // Server: use BACKEND_API_URL or NEXT_PUBLIC_API_URL
+  const serverUrl = process.env.BACKEND_API_URL || process.env.NEXT_PUBLIC_API_URL;
+  if (serverUrl) return serverUrl;
+  return "http://localhost:5000/api";
 }
 
 interface ApiConfig {
@@ -224,8 +223,8 @@ export const uploadApi = {
       size: file.size
     });
 
-    // Call backend directly - CORS is configured
-    const response = await fetch(`${API_BASE_URL}/upload/image`, {
+    const baseUrl = getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/upload/image`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
